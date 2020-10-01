@@ -8,7 +8,7 @@ using ThemePark.Models;
 
 namespace ThemePark.Services.Interfaces
 {
-    interface IRideService
+    public interface IRideService
     {
 
         List<Ride> GetAllRides();

@@ -12,6 +12,9 @@ namespace ThemePark
         protected void Application_Start()
         {
             GlobalConfiguration.Configure(WebApiConfig.Register);
+
+            // AutoFac
+           Bootstrapper.Run();
         }
     }
 }

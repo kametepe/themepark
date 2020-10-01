@@ -4,25 +4,33 @@ using System.Linq;
 using System.Web;
 using ThemePark.Domains;
 using ThemePark.Models;
+using ThemePark.Repositories.Interfaces;
 using ThemePark.Services.Interfaces;
 
 namespace ThemePark.Services.Implementations
 {
+    
     public class RideService : IRideService
     {
+        private IRideRepository rideRepository;
+
+        public RideService(IRideRepository rideRepo)
+        {
+            rideRepository = rideRepo;
+        }
         public List<Ride> GetAllRides()
         {
-            throw new NotImplementedException();
+            return rideRepository.GetAllRides();
         }
 
         public Ride GetRideByID(Guid id)
         {
-            throw new NotImplementedException();
+            return rideRepository.GetRideByID(id);
         }
 
         public List<Ride> SearchRide(RideParam param)
         {
-            throw new NotImplementedException();
+            return rideRepository.SearchRide(param);
         }
     }
 }

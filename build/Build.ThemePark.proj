@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="14.0">
+
+	<!-- General -->
+	<UsingTask TaskName="TransformXml" AssemblyFile="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Web\Microsoft.Web.Publishing.Tasks.dll"/>
+
+ 
+	<!-- Property Initialization -->
+	<PropertyGroup>
+		<Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+		<Platform Condition=" '$(Platform)' == '' ">Any CPU</Platform>
+		<MinimumVisualStudioVersion>14.0</MinimumVisualStudioVersion>
+		<VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">14.0</VisualStudioVersion>
+		<RunCodeAnalysis>false</RunCodeAnalysis>				
+		<SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildProjectDirectory)\..</SolutionDir>
+		<BuildFolder>$(SolutionDir)\Build</BuildFolder>
+		<BinariesDir>$(BuildFolder)\Binaries</BinariesDir>		
+		<ScriptDir>$(BuildFolder)\Scripts</ScriptDir>		
+		<OutputDir>$(SolutionDir)\Output</OutputDir>		
+		<Environment Condition="'$(Environment)' == ''">$(Configuration)</Environment>							
+		<SlnName>ThemePark</SlnName>						
+		<StageFolder>$(OutputDir)\$(Environment)</StageFolder>	
+		 			
+
+		
+		<BuildPlatform Condition="$(ProgramW6432) != ''">x64</BuildPlatform>
+		<BuildPlatform Condition="$(BuildPlatform) == ''">$(Platform)</BuildPlatform>		
+		<BuildNeutral Condition="$(Platform) != 'Any CPU'">Any CPU</BuildNeutral>				
+	
+		<!-- $([System.DateTime]::Now.ToString("yy")) -->
+		<Major Condition="'$(Major)'==''">2</Major>
+		<Minor Condition="'$(Minor)'==''">$([System.DateTime]::Now.AddYears(-2015).Year)</Minor>
+		<Build Condition="'$(Build)'==''">$([System.DateTime]::Now.DayOfYear)</Build>
+		<Revision Condition="'$(Revision)'==''">$([System.DateTime]::Now.ToString("HHmm"))</Revision>    
+		
+		<Version Condition="'$(MyVersion)'==''">$(Major).$(Minor).$(Build).$(Revision)</Version>  
+		<!--<Version>$(Major).$(Minor).$(Build).$(Revision)</Version>-->
+		<VersionPath>$(Version.Replace('.','-'))</VersionPath>						
+		<ZipDirectory>$(StageFolder)\$(VersionPath)</ZipDirectory>		
+		<ZipVersionFileSuffix Condition="$(VersionPath) != ''">ThemePark-$(Environment)-$(VersionPath)</ZipVersionFileSuffix>
+		<ZipVersionFileSuffix Condition="$(VersionPath) == ''"></ZipVersionFileSuffix>
+			
+		<ZipOutput>$(ZipDirectory)\$(ZipVersionFileSuffix).zip</ZipOutput>		
+		
+		<WebAPIProject>$(SolutionDir)\ThemePark\ThemePark.csproj</WebAPIProject>
+		 
+
+		<ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>		
+ 
+	</PropertyGroup>	
+	
+	<Import Project="$(BinariesDir)\MSBuild\MSBuild.Community.Tasks.Targets"/>
+	<Import Project="$(BinariesDir)\MSBuild\Extensions\MSBuild.ExtensionPack.VersionNumber.targets"/>	
+	
+	<!-- Coordinating Targets -->
+	<Target Name="GetMSBuildProjectParentDirectory">
+		<Message Text="Create DLL Platform: $(Platform)"/>
+		<Message Text="Create DLL Major: $(Major)"/>
+		<Message Text="Create DLL Minor: $(Minor)"/>
+		<Message Text="Create DLL Build: $(Build)"/>
+		<Message Text="Create DLL Revision: $(Revision)"/>
+		<Message Text="Create DLL version: ***$(Version)***"/>
+		<Message Text="Create DLL VersionPath: $(VersionPath)"/>
+		<!-- First you create the MSBuildProject Parent directory Item -->
+		<CreateItem Include="$(MSBuildProjectDirectory)\..\">
+		<Output ItemName="MSBuildProjectParentDirectory" TaskParameter="Include"/>
+		</CreateItem>
+
+		<!-- You can now retrieve its fullpath using Fullpath metadata -->
+		<Message Text="%(MSBuildProjectParentDirectory.Fullpath)"/>
+
+		<!-- Create a property based on parent fullpath-->
+		<CreateProperty Value="%(MSBuildProjectParentDirectory.Fullpath)">
+		<Output PropertyName="SlnFolder" TaskParameter="Value"/>
+		</CreateProperty>
+	</Target> 
+
+	<Target Name="Build" DependsOnTargets="GetMSBuildProjectParentDirectory; Clean; Compile">				
+	</Target>	
+
+
+	<!-- Building -->
+	<Target Name="Clean">		
+		<!-- Clean Solution -->
+		<MSBuild Projects="$(SolutionDir)\$(SlnName).sln" Targets="Clean" />			
+	</Target>
+	
+	<Target Name="BuildVersion" DependsOnTargets="GetMSBuildProjectParentDirectory; Clean;">				
+		<!-- Set working version to Solution -->
+		<CallTarget Targets="SetDllVersion"/>
+		<CallTarget Targets="Compile"/>					
+	</Target>
+
+	<Target Name="Deploy">	   			
+		<CallTarget Targets="BuildVersion" />						
+		<!-- Compile CBN CoreBanking Solution -->
+		<CallTarget Targets="Packaging" />	
+	 	
+	</Target>	
+			
+
+	
+	<Target Name="Compile">
+		<!-- compile solution -->
+		<MSBuild Projects="$(SolutionDir)\$(SlnName).sln" Targets="Build" 
+				 Properties="Configuration=$(Configuration);Platform=$(Platform);
+							 VisualStudioVersion=$(VisualStudioVersion)
+							;RunCodeAnalysis=$(RunCodeAnalysis)" />
+	</Target>
+	
+	<Target Name="SetDllVersion">
+		<Message Text="Create DLL version: $(version)"/>
+		<exec command="powershell -ExecutionPolicy Unrestricted  -file $(ScriptDir)\SetVersion.ps1 $(SolutionDir) $(version)"/>
+	</Target>	
+	
+	<Target Name="Packaging">
+		<Message Text="Create new package for version: $(version)"/>
+		<!-- delete the build folder -->
+		<MakeDir Directories="$(OutputDir)" Condition="!Exists('$(OutputDir)')" ContinueOnError="true"/>
+		
+		<RemoveDir Directories="$(StageFolder)\$(VersionPath)" Condition="Exists('$(StageFolder)\$(VersionPath)')" ContinueOnError="true"/>
+		<MakeDir Directories="$(StageFolder)\$(VersionPath)" ContinueOnError="true"/>							  
+		
+		<!-- publish   Web project  -->
+		
+		<Message Text="Publishing   Web project $(version)"/>
+		<MSBuild Projects="$(WebAPIProject)"
+			 Properties="Configuration=$(Configuration);
+						 Platform=$(Platform);						 
+						 DeployOnBuild=true;
+						 DeployTarget=Package;
+						 CreatePackageOnPublish=True;						 
+						 PublishProfile=$(Environment).pubxml;
+						 DesktopBuildPackageLocation=$(StageFolder)\$(VersionPath)"							 
+			 ContinueOnError="false" />	
+		 
+										 
+		<!-- <CallTarget Targets="ZipPackage" />	-->	
+		 	 																	
+	</Target>
+
+	<Target Name="ZipPackage">
+		<ItemGroup>
+			<Zip-Files Include="$(ZipDirectory)\**\*" />			
+		</ItemGroup>
+		
+		<Zip Files="@(Zip-Files)" WorkingDirectory="$(ZipDirectory)" ZipFileName="$(ZipOutput)" />
+	</Target>
+	
+ 
+	
+	<!-- Testing -->
+	<Target Name="Test">
+		
+		<PropertyGroup>
+			<TestFolder>$(BuildFolder)\Compile</TestFolder>
+		</PropertyGroup>
+	
+		<!-- Compile to "OutputFolder" -->
+		<MSBuild Projects="$(SolutionDir)\$(SlnName).sln" Targets="Build" Properties="Configuration=$(Configuration);Platform=$(Platform);OutputPath=$(TestFolder)" />
+
+		<!-- Run unit test assemblies -->
+		<CreateItem Include="$(TestFolder)\*.Tests.dll">
+			<Output TaskParameter="Include" ItemName="TestAssemblies" />
+		</CreateItem>
+		
+		<!-- execute test -->
+		<Message Text="Executing test fixtures with NUnit... This is a long running process and could take a few minutes... Dont't panic ;-)"/>
+		<NUnit Assemblies="@(TestAssemblies)" ToolPath="$(LibFolder)\nunit" WorkingDirectory="$(TestFolder)" OutputXmlFile="$(BuildFolder)\SmartStoreNET.Tests.xml" />
+	</Target>
+
+ 
+</Project>
+
+
+
+
+
+
